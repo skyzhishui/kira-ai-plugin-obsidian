@@ -1,0 +1,17 @@
+{
+  "display_name": "Obsidian 笔记工具",
+  "plugin_id": "kira-ai-plugin-obsidian",
+  "version": "1.0.0",
+  "core_version": ">=2.31.0",
+  "author": "skyzhishui",
+  "description": "Obsidian 笔记工具集：搜索/列出/读取/新建/追加/局部修改/删除 Obsidian 笔记（经 Obsidian Local REST API 社区插件操作 vault）",
+  "tags": ["notes", "utility"],
+  "repo": "https://github.com/skyzhishui/kira-ai-plugin-obsidian",
+  "icon": "icon.svg",
+  "locales": {
+    "en": {
+      "display_name": "Obsidian Notes",
+      "description": "Obsidian note tools: search/list/read/create/append/patch/delete notes in a vault via the Obsidian Local REST API community plugin."
+    }
+  }
+}

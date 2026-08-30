@@ -1,0 +1,38 @@
+{
+  "base_url": {
+    "type": "string",
+    "name": "Local REST API 地址",
+    "default": "",
+    "hint": "Obsidian 与 KiraAI 同机时填 http://127.0.0.1:27123；远端填 Obsidian 所在机器的可达地址。留空则笔记工具不可用。"
+  },
+  "api_key": {
+    "type": "sensitive",
+    "name": "API Key",
+    "default": "",
+    "hint": "Local REST API 插件设置页生成的密钥（要求认证模式），未填会 401。"
+  },
+  "timeout_seconds": {
+    "type": "integer",
+    "name": "请求超时（秒）",
+    "default": 15,
+    "hint": "单次 HTTP 请求超时秒数。"
+  },
+  "max_results": {
+    "type": "integer",
+    "name": "搜索最多显示条数",
+    "default": 8,
+    "hint": "note_search 结果最多展示的条数。"
+  },
+  "summary_max_length": {
+    "type": "integer",
+    "name": "搜索摘要最大字符数",
+    "default": 150,
+    "hint": "note_search 每条摘要截断长度。"
+  },
+  "max_output_chars": {
+    "type": "integer",
+    "name": "结果最大字符数",
+    "default": 8000,
+    "hint": "note_list/note_read 等结果超出该字符数会截断并标注。"
+  }
+}
