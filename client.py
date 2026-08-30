@@ -100,7 +100,9 @@ class ObsidianClient:
         logger.debug("Obsidian %s %s", method, url)
         try:
             async with httpx.AsyncClient(
-                timeout=self._timeout, transport=self._transport
+                timeout=self._timeout,
+                transport=self._transport,
+                follow_redirects=True,
             ) as client:
                 resp = await client.request(method, url, headers=headers, content=data)
         except httpx.TimeoutException:

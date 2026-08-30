@@ -47,7 +47,7 @@ def _as_error(result: Any) -> str | None:
     Returns:
         错误文本；result 非错误 dict 时返回 None（正常结果）。
     """
-    if not (isinstance(result, dict) and "error" in result):
+    if not (isinstance(result, dict) and isinstance(result.get("error"), str)):
         return None
     err = str(result["error"])
     if err.startswith("connection:") or err.startswith("timeout"):
@@ -69,6 +69,22 @@ def _truncate(text: str, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[:limit] + "\n…[输出已截断]"
+
+
+def _as_int(value: Any, default: int) -> int:
+    """配置项安全转 int；None/空串/非法值落回默认（单字段容错，不拖垮整插件）。"""
+    try:
+        return int(value) if value not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _as_float(value: Any, default: float) -> float:
+    """配置项安全转 float；None/空串/非法值落回默认（单字段容错）。"""
+    try:
+        return float(value) if value not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
 
 
 def _take_path_content(args: dict[str, Any]) -> tuple[str | None, str]:
@@ -110,13 +126,11 @@ class ObsidianPlugin(BasePlugin):
             self._client = ObsidianClient(
                 base_url,
                 api_key,
-                timeout=float(self.plugin_cfg.get("timeout_seconds", 15) or 15),
+                timeout=_as_float(self.plugin_cfg.get("timeout_seconds"), 15.0),
             )
-            self._max_output = int(self.plugin_cfg.get("max_output_chars", 8000) or 8000)
-            self._max_results = int(self.plugin_cfg.get("max_results", 8) or 8)
-            self._summary_len = int(
-                self.plugin_cfg.get("summary_max_length", 150) or 150
-            )
+            self._max_output = _as_int(self.plugin_cfg.get("max_output_chars"), 8000)
+            self._max_results = _as_int(self.plugin_cfg.get("max_results"), 8)
+            self._summary_len = _as_int(self.plugin_cfg.get("summary_max_length"), 150)
             logger.info("Obsidian: 笔记工具已就绪（base_url=%s，共 7 个工具）", base_url)
         except Exception:
             logger.exception("Obsidian: 配置解析失败，笔记工具降级为不可用")
@@ -146,7 +160,7 @@ class ObsidianPlugin(BasePlugin):
         },
     )
     async def note_list(self, event, *_, path: str = "", page: int = 1,
-                        page_size: int = 30) -> str:
+                        page_size: int = 30, **_kwargs) -> str:
         if self._client is None:
             return _NOT_CONFIGURED
         path = str(path or "").strip().strip("/")
@@ -197,7 +211,8 @@ class ObsidianPlugin(BasePlugin):
             "required": ["path"],
         },
     )
-    async def note_read(self, event, *_, path: str = "", mode: str = "content") -> str:
+    async def note_read(self, event, *_, path: str = "", mode: str = "content",
+                        **_kwargs) -> str:
         if self._client is None:
             return _NOT_CONFIGURED
         path = str(path or "").strip().strip("/")
@@ -241,7 +256,8 @@ class ObsidianPlugin(BasePlugin):
             "required": ["path", "content"],
         },
     )
-    async def note_write(self, event, *_, path: str = "", content: str | None = None) -> str:
+    async def note_write(self, event, *_, path: str = "",
+                         content: str | None = None, **_kwargs) -> str:
         if self._client is None:
             return _NOT_CONFIGURED
         path, content = _take_path_content({"path": path, "content": content})
@@ -269,7 +285,8 @@ class ObsidianPlugin(BasePlugin):
             "required": ["path", "content"],
         },
     )
-    async def note_append(self, event, *_, path: str = "", content: str | None = None) -> str:
+    async def note_append(self, event, *_, path: str = "",
+                          content: str | None = None, **_kwargs) -> str:
         if self._client is None:
             return _NOT_CONFIGURED
         path, content = _take_path_content({"path": path, "content": content})
@@ -333,7 +350,7 @@ class ObsidianPlugin(BasePlugin):
                          target_type: str = "", target: str = "",
                          content: str | None = None,
                          create_if_missing: bool = False,
-                         target_scope: str = "content") -> str:
+                         target_scope: str = "content", **_kwargs) -> str:
         if self._client is None:
             return _NOT_CONFIGURED
         path = str(path or "").strip().strip("/")
@@ -389,7 +406,7 @@ class ObsidianPlugin(BasePlugin):
             "required": ["path"],
         },
     )
-    async def note_delete(self, event, *_, path: str = "") -> str:
+    async def note_delete(self, event, *_, path: str = "", **_kwargs) -> str:
         if self._client is None:
             return _NOT_CONFIGURED
         path = str(path or "").strip().strip("/")
@@ -423,7 +440,7 @@ class ObsidianPlugin(BasePlugin):
         },
     )
     async def note_search(self, event, *_, query: str = "",
-                          search_type: str = "simple") -> str:
+                          search_type: str = "simple", **_kwargs) -> str:
         if self._client is None:
             return _NOT_CONFIGURED
         query = str(query or "")

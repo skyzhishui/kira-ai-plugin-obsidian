@@ -148,13 +148,23 @@ async def test_unconfigured_degrades():
     assert "未配置" in result
 
 
-async def test_bad_config_degrades_gracefully():
+async def test_bad_optional_fields_fall_back_to_defaults():
+    # 可选配置字段坏值只落回该字段默认值，不再拖垮整个插件
     inst = await _init(_make_plugin(
-        {"base_url": "http://x", "timeout_seconds": "not-a-number"}
+        {"base_url": "http://x", "timeout_seconds": "not-a-number",
+         "max_results": None, "summary_max_length": "abc", "max_output_chars": ""}
     ))
+    assert inst._client is not None
+    assert inst._client._timeout == 15.0
+    assert inst._max_results == 8
+    assert inst._summary_len == 150
+    assert inst._max_output == 8000
+
+
+async def test_initialize_never_raises_on_garbage_config():
+    # 外层兜底仍生效：plugin_cfg 非 dict（无 .get）也不许炸出异常
+    inst = await _init(_make_plugin(123))
     assert inst._client is None
-    result = await inst.note_list(None)
-    assert "未配置" in result
 
 
 async def test_reinit_supported():
@@ -212,6 +222,22 @@ async def test_list_error():
     inst._client = FakeClient({"error": "HTTP 404: not found"})
     result = await inst.note_list(None)
     assert result.startswith("错误：HTTP 404")
+
+
+async def test_list_non_string_error_key_not_misjudged():
+    # 顶层 error 键为非字符串的合法 dict 不再被误判为错误
+    inst = await _init(_make_plugin({"base_url": "http://x"}))
+    inst._client = FakeClient({"error": ["unexpected"], "files": []})
+    result = await inst.note_list(None)
+    assert "共 0 项" in result
+
+
+async def test_extra_kwargs_tolerated():
+    # 执行器 **args 原样透传，LLM 多传的未声明参数应静默忽略
+    inst = await _init(_make_plugin({"base_url": "http://x"}))
+    inst._client = FakeClient([{"path": "a.md", "type": "file"}])
+    result = await inst.note_list(None, bogus_param=1)
+    assert "a.md" in result
 
 
 # ---------------------------------------------------------------- note_read
@@ -368,6 +394,29 @@ async def test_patch_invalid_target_type():
     assert "不支持的目标类型" in result
 
 
+async def test_patch_invalid_target_scope():
+    inst = await _init(_make_plugin({"base_url": "http://x"}))
+    inst._client = FakeClient(None)
+    result = await inst.note_patch(
+        None, path="a.md", operation="append", target_type="heading",
+        target="t", content="x", target_scope="bogus",
+    )
+    assert "不支持的 target_scope" in result
+    assert inst._client.calls == []
+
+
+async def test_patch_create_if_missing_string_form():
+    # LLM 可能以字符串形式传布尔，"true" 应同样触发建章节头
+    inst = await _init(_make_plugin({"base_url": "http://x"}))
+    inst._client = FakeClient(None)
+    await inst.note_patch(
+        None, path="a.md", operation="append", target_type="heading",
+        target="t", content="x", create_if_missing="true",
+    )
+    headers = inst._client.calls[0]["extra_headers"]
+    assert headers["Create-Target-If-Missing"] == "true"
+
+
 # ---------------------------------------------------------------- note_search
 
 
@@ -386,6 +435,16 @@ async def test_search_simple_sorted_and_trimmed():
     assert "high.md" in result and "low.md" not in result
     assert "相关度:9.80" in result
     assert "高相关" in result
+
+
+async def test_search_simple_query_encoded():
+    # simple 搜索的中文/空格 query 必须预编码
+    inst = await _init(_make_plugin({"base_url": "http://x"}))
+    inst._client = FakeClient([])
+    await inst.note_search(None, query="设计 文档")
+    assert inst._client.calls[0]["path"] == (
+        "/search/simple/?query=%E8%AE%BE%E8%AE%A1%20%E6%96%87%E6%A1%A3"
+    )
 
 
 async def test_search_no_results():
@@ -460,6 +519,17 @@ async def test_client_request_sends_auth_and_parses_json():
     assert result == {"files": []}
     assert seen["auth"] == "Bearer secret-key"
     assert "/vault/%E7%9B%AE%E5%BD%95/" in seen["url"]
+
+
+async def test_client_follows_redirects():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/old.md"):
+            return httpx.Response(302, headers={"Location": "/vault/new.md"})
+        return httpx.Response(200, text="moved content")
+
+    client = _real_client(handler)
+    result = await client.request("GET", "/vault/old.md")
+    assert result == "moved content"
 
 
 async def test_client_204_and_error():
